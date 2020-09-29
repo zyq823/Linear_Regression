@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 import math
 
 # Initialization for Homework 2
@@ -19,7 +20,7 @@ class DataPoint(object): # DataPoint class helps to group data and methods
         return np.array([self.stamina, self.attVal, self.defVal, self.capRate, self.fleeRate, self.spChan, self.primStr, self.ptOut])
 
     def __str__(self):
-        return "Stamina: {}, Attack Value: {}, Defense Value: {}, Capture Rate: {}, Flee Rate: {}, Spawn Chance: {}, Primary Strength: {}, Combat Point Outcome".format(self.stamina, self.attVal, self.defVal, self.capRate, self.fleeRate,self.spChan, self.primStr, self.ptOut)
+        return "Stamina: {}, Attack Value: {}, Defense Value: {}, Capture Rate: {}, Flee Rate: {}, Spawn Chance: {}, Primary Strength: {}, Combat Point Outcome: {}".format(self.stamina, self.attVal, self.defVal, self.capRate, self.fleeRate, self.spChan, self.primStr, self.ptOut)
         
 # the following code is for Question (i)
 
@@ -33,7 +34,6 @@ def parse_dataset(filename):
         name, stamina, attVal, defVal, capRate, fleeRate, spChan, primStr, ptOut = line.strip().split(',')  # strip() removes '\n', and split(',') splits the line at tabs
         dataset.append(DataPoint({'stamina':float(stamina), 'attack_value':float(attVal), 'defense_value':float(defVal), 'capture_rate':float(capRate), 'flee_rate':float(fleeRate), 'spawn_chance':float(spChan), 'primary_strength':primStr, 'combat_point_outcome':float(ptOut)}))  # Create DataPoint object for the given data
 
-    print("Total Number of Data Points: {0}".format(len(dataset)))
     return dataset
 
 poke_set = parse_dataset('hw2_data.csv')
@@ -225,6 +225,64 @@ def one_hot_encoding(dataset):
     return dataset
 
 encoded_set = one_hot_encoding(poke_set)
-print(encoded_set[0])
+
 
 # the following code is for Question (v)
+
+def OLS(dataset):
+    n = len(dataset)
+    xMatrix = np.empty([n, 22]) # N by D matrix. D = 7+15 because 7 numerical attributes, and 15 categories in the categorical attribute
+    for poke in range(n):
+        p = dataset[poke]
+        xMatrix[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
+
+    yMatrix = np.empty([n, 1]) # N by 1 matrix
+    for poke in range(n):
+        p = dataset[poke]
+        yMatrix[poke] = [p.ptOut]
+
+    XT = xMatrix.transpose()
+    XTX = np.matmul(XT, xMatrix)
+    XTXinv = np.linalg.pinv(XTX)
+    w = np.matmul(np.matmul(XTXinv, XT), yMatrix)
+    return w
+
+def computeRSS(trainSet, validSet, w):
+    n = len(validSet)
+    X = np.empty([n, 22])
+    for poke in range(n):
+        p = validSet[poke]
+        X[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
+
+    y = np.empty([n, 1])
+    for poke in range(n):
+        p = validSet[poke]
+        y[poke] = [p.ptOut]
+
+    Xw = np.matmul(X, w)
+    y_Xw = y - Xw
+    y_XwT = y_Xw.transpose()
+    RSS = np.matmul(y_XwT, y_Xw)
+    return math.sqrt(RSS)
+
+def cross_validate(dataset, k):
+    random.shuffle(dataset)
+    folds = np.array_split(dataset, k)
+    sqrtVal = [] # store the square root of RSS at every fold
+    for i in range(k):
+        trainSet = list()
+        for j in range(len(folds)):
+            if j == i:
+                validSet = folds[j] # use one fifth of entire dataset as validation set
+            else:
+                for dp in folds[j]:
+                    trainSet.append(dp)
+        w = OLS(trainSet) # parameters obtained from training set
+        sqrtVal.append(computeRSS(trainSet, validSet, w))
+    sum = 0.0
+    for v in sqrtVal:
+        sum = sum + v
+    avgRSS = sum / k # average square root of RSS across k folds
+
+cross_validate(encoded_set, 5)
+
