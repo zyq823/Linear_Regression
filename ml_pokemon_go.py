@@ -229,44 +229,41 @@ encoded_set = one_hot_encoding(poke_set)
 
 # the following code is for Question (v)
 
-def OLS(dataset):
-    n = len(dataset)
-    xMatrix = np.empty([n, 22]) # N by D matrix. D = 7+15 because 7 numerical attributes, and 15 categories in the categorical attribute
-    for poke in range(n):
-        p = dataset[poke]
-        xMatrix[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
-
-    yMatrix = np.empty([n, 1]) # N by 1 matrix
-    for poke in range(n):
-        p = dataset[poke]
-        yMatrix[poke] = [p.ptOut]
-
-    XT = xMatrix.transpose()
-    XTX = np.matmul(XT, xMatrix)
+def LR_OLS(dataset, X, y):
+    XT = X.transpose()
+    XTX = np.matmul(XT, X)
     XTXinv = np.linalg.pinv(XTX)
-    w = np.matmul(np.matmul(XTXinv, XT), yMatrix)
+    w = np.matmul(np.matmul(XTXinv, XT), y)
     return w
 
-def computeRSS(trainSet, validSet, w):
-    n = len(validSet)
-    X = np.empty([n, 22])
-    for poke in range(n):
-        p = validSet[poke]
-        X[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
-
-    y = np.empty([n, 1])
-    for poke in range(n):
-        p = validSet[poke]
-        y[poke] = [p.ptOut]
-
+def computeRSS(validSet, w, X, y):
     Xw = np.matmul(X, w)
     y_Xw = y - Xw
     y_XwT = y_Xw.transpose()
     RSS = np.matmul(y_XwT, y_Xw)
     return math.sqrt(RSS)
 
-def cross_validate(dataset, k):
-    random.shuffle(dataset)
+
+# the following code is for both Question (v) and Question (vi)
+
+def LR_regular(dataset, X, y, reg_term):
+    XT = X.transpose()
+    XTX = np.matmul(XT, X)
+
+    s = len(XTX)
+    iMatrix = np.zeros([s,s]) # initialize D by D identity matrix
+    for i in range(len(iMatrix)):
+        iMatrix[i][i] = 1
+    regI = reg_term * iMatrix
+    
+    XTX_reg = XTX + regI
+    XTXinv = np.linalg.pinv(XTX_reg)
+    w = np.matmul(np.matmul(XTXinv, XT), y)
+    return w
+
+
+def cross_validate(dataset, k, reg_term):
+    # random.shuffle(dataset)
     folds = np.array_split(dataset, k)
     sqrtVal = [] # store the square root of RSS at every fold
     for i in range(k):
@@ -277,12 +274,40 @@ def cross_validate(dataset, k):
             else:
                 for dp in folds[j]:
                     trainSet.append(dp)
-        w = OLS(trainSet) # parameters obtained from training set
-        sqrtVal.append(computeRSS(trainSet, validSet, w))
-    sum = 0.0
-    for v in sqrtVal:
-        sum = sum + v
-    avgRSS = sum / k # average square root of RSS across k folds
+        
+        # now create x and y matrix for training set
+        nT = len(trainSet)
+        X = np.empty([nT, 22]) # N by D matrix. D = 7+15 because 7 numerical attributes, and 15 categories in the categorical attribute
+        for poke in range(nT):
+            p = trainSet[poke]
+            X[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
 
-cross_validate(encoded_set, 5)
+        y = np.empty([nT, 1]) # N by 1 matrix
+        for poke in range(nT):
+            p = trainSet[poke]
+            y[poke] = [p.ptOut]
 
+        # now create x and y matrix for validation set
+        nV = len(validSet)
+        XX = np.empty([nV, 22])
+        for poke in range(nV):
+            p = validSet[poke]
+            XX[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
+
+        yy = np.empty([nV, 1])
+        for poke in range(nV):
+            p = validSet[poke]
+            yy[poke] = [p.ptOut]
+
+        if reg_term > 0: # this if statement is for Question (vi)
+            w = LR_regular(trainSet, X, y, reg_term)
+            sqrtVal.append(computeRSS(validSet, w, XX, yy))
+        else:
+            w = LR_OLS(trainSet, X, y) # parameters obtained from training set
+            sqrtVal.append(computeRSS(validSet, w, XX, yy))
+
+    avgRSS = np.mean(sqrtVal) # average square root of RSS across k folds
+    # print(avgRSS)
+
+for i in [0, 0.001, 0.01, 0.1, 0.5, 0.888,1, 5, 10]: # experiment with different values for the regularization term
+    cross_validate(encoded_set, 5, i)
