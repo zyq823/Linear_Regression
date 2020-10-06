@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 import math
+from sklearn.preprocessing import Binarizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn import metrics
 
 # Initialization for Homework 2
 
@@ -246,7 +250,7 @@ def computeRSS(validSet, w, X, y):
 
 # the following code is for both Question (v) and Question (vi)
 
-def LR_regular(dataset, X, y, reg_term):
+# def LR_regular(dataset, X, y, reg_term): # linear regression with regularization
     XT = X.transpose()
     XTX = np.matmul(XT, X)
 
@@ -263,7 +267,7 @@ def LR_regular(dataset, X, y, reg_term):
 
 
 def cross_validate(dataset, k, reg_term):
-    # random.shuffle(dataset)
+    random.shuffle(dataset)
     folds = np.array_split(dataset, k)
     sqrtVal = [] # store the square root of RSS at every fold
     for i in range(k):
@@ -307,7 +311,183 @@ def cross_validate(dataset, k, reg_term):
             sqrtVal.append(computeRSS(validSet, w, XX, yy))
 
     avgRSS = np.mean(sqrtVal) # average square root of RSS across k folds
-    # print(avgRSS)
 
-for i in [0, 0.001, 0.01, 0.1, 0.5, 0.888,1, 5, 10]: # experiment with different values for the regularization term
-    cross_validate(encoded_set, 5, i)
+# for i in [0, 0.001, 0.01, 0.1, 0.5, 0.888,1, 5, 10]: # experiment with different values for the regularization term
+#     cross_validate(encoded_set, 5, i)
+
+
+# the following code is for Question (vii)
+
+def CVOutAttV(dataset, k): # Combat point against attack value
+    random.shuffle(dataset)
+    folds = np.array_split(dataset, k)
+    sqrtVal = [] 
+    for i in range(k):
+        trainSet = list()
+        for j in range(len(folds)):
+            if j == i:
+                validSet = folds[j] 
+            else:
+                for dp in folds[j]:
+                    trainSet.append(dp)
+        
+        nT = len(trainSet)
+        X = np.empty([nT, 2]) 
+        for poke in range(nT):
+            p = trainSet[poke]
+            X[poke] = [1.0, p.attVal]
+
+        y = np.empty([nT, 1]) 
+        for poke in range(nT):
+            p = trainSet[poke]
+            y[poke] = [p.ptOut]
+
+        nV = len(validSet)
+        XX = np.empty([nV, 2])
+        for poke in range(nV):
+            p = validSet[poke]
+            XX[poke] = [1.0, p.attVal]
+
+        yy = np.empty([nV, 1])
+        for poke in range(nV):
+            p = validSet[poke]
+            yy[poke] = [p.ptOut]
+
+        w = LR_OLS(trainSet, X, y) # parameters obtained from training set
+        sqrtVal.append(computeRSS(validSet, w, XX, yy))
+
+    avgRSS = np.mean(sqrtVal) # average square root of RSS across k folds
+    print(avgRSS)
+
+# CVOutAttV(encoded_set, 5)
+
+def CVDefVAttV(dataset, k): # Combat point against attack value
+    # random.shuffle(dataset)
+    folds = np.array_split(dataset, k)
+    sqrtVal = [] 
+    for i in range(k):
+        trainSet = list()
+        for j in range(len(folds)):
+            if j == i:
+                validSet = folds[j] 
+            else:
+                for dp in folds[j]:
+                    trainSet.append(dp)
+        
+        nT = len(trainSet)
+        X = np.empty([nT, 2]) 
+        for poke in range(nT):
+            p = trainSet[poke]
+            X[poke] = [1.0, p.attVal]
+
+        y = np.empty([nT, 1]) 
+        for poke in range(nT):
+            p = trainSet[poke]
+            y[poke] = [p.defVal]
+
+        nV = len(validSet)
+        XX = np.empty([nV, 2])
+        for poke in range(nV):
+            p = validSet[poke]
+            XX[poke] = [1.0, p.attVal]
+
+        yy = np.empty([nV, 1])
+        for poke in range(nV):
+            p = validSet[poke]
+            yy[poke] = [p.defVal]
+
+        w = LR_OLS(trainSet, X, y) # parameters obtained from training set
+        sqrtVal.append(computeRSS(validSet, w, XX, yy))
+
+    avgRSS = np.mean(sqrtVal) # average square root of RSS across k folds
+    print(avgRSS)
+
+# CVDefVAttV(encoded_set, 5)
+
+
+# the following code is for Question (viii)
+
+def BinOutcome(dataset): 
+    combatPts = []
+    for poke in dataset:
+        combatPts.append(poke.ptOut)
+
+    meanPtOut = np.mean(combatPts)
+    combatPts = np.array(combatPts)
+    combatPts = combatPts.reshape(1, -1)
+
+    binarizerP = Binarizer(threshold=meanPtOut)
+    return binarizerP.fit_transform(combatPts)
+ 
+#  BinComPts = BinOutcome(poke_set)
+
+def logisticR(dataset):
+    random.shuffle(dataset)
+    X = np.empty([len(dataset), 22])
+    for poke, p in enumerate(dataset):    
+        X[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
+
+    y = BinOutcome(dataset)[0]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state = 0)
+
+    logReg = LogisticRegression(penalty = 'none', max_iter = 1000) # no regularization
+    logReg.fit(X_train, y_train)
+
+    y_pred = logReg.predict(X_test)
+
+#     cnf_matrix = metrics.confusion_matrix(y_test, y_pred) # confusion matrix
+
+# logisticR(encoded_set)
+
+
+# the following code is for Question (viii)
+
+def LRR(Xtrain, Xtest, ytrain, ytest, reg_term): # perform logistic regression with regularization
+    logReg = LogisticRegression(C = 1/reg_term, max_iter = 10000) # penalty = 'l2' by default
+    logReg.fit(Xtrain, ytrain)
+
+    ypred = logReg.predict(Xtest)
+
+    cnf_matrix = metrics.confusion_matrix(ytest, ypred) # confusion matrix
+    acc = (cnf_matrix[0][0] + cnf_matrix[1][1]) / np.sum(cnf_matrix) # accuracy 
+    return acc
+
+def cross_validate(trainX, trainY, k, reg_term):
+    foldsX = np.array_split(trainX, k)  
+    foldsY = np.array_split(trainY, k) 
+    Acc = [] # store the accuracy at every fold
+
+    # now construct training and valid set for each fold
+    for i in range(k):
+        X = list()
+        y = list()
+        for j in range(k):
+            if j == i:
+                XX = foldsX[j] # use one fifth of entire dataset as validation set
+                yy = foldsY[j] # use one fifth of entire dataset as validation set
+            else:
+                for dp in foldsX[j]:
+                    X.append(dp)
+                for dp in foldsY[j]:
+                    y.append(dp)
+        Acc.append(LRR(X, XX, y, yy, reg_term))
+
+    return np.mean(Acc) # average performance for current hyperparameter
+
+def logisticR_reg(dataset):
+    random.shuffle(dataset)
+    X = np.empty([len(dataset), 22])
+    for poke in range(len(dataset)):
+        p = dataset[poke]
+        X[poke] = [1.0, p.stamina, p.attVal, p.defVal, p.capRate, p.fleeRate, p.spChan] + p.primStr
+
+    y = BinOutcome(dataset)[0]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state = 0)
+
+    for i in [0.001, 0.01, 0.1, 0.25, 0.5, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 5, 10]: 
+        print(cross_validate(X_train, y_train, 5, i), "\t", LRR(X_train, X_test, y_train, y_test, i))
+        # printing accuracy obtained from cross-validation for each tested lambda value and final accuracy on test data. 
+
+logisticR_reg(encoded_set) 
